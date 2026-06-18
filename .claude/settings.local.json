@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"/c/Users/Duseca/Desktop/Duseca/Hire app Admin panel/Hire-app-admin\" && find src -type f | sort)",
+      "Read(//c/c/Users/Duseca/Desktop/Duseca/Hire app Admin panel/Hire-app-admin/**)"
+    ]
+  }
+}
