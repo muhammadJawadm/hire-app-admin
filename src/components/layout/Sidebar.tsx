@@ -1,7 +1,7 @@
 import { NavLink } from "react-router";
 import {
   FaThLarge, FaUsers, FaClipboardList, FaTags, FaCalendarCheck,
-  FaCreditCard, FaChartLine, FaComments, FaCog,
+  FaCreditCard, FaChartLine, FaComments, FaCog, FaBell,
   FaTimes, FaChevronLeft, FaChevronRight,
 } from "react-icons/fa";
 import logo from "../../assets/logo.png";
@@ -32,8 +32,9 @@ const navGroups = [
   {
     label: "System",
     items: [
-      { label: "Reviews & Disputes", path: "/reviews",  icon: <FaComments size={15} /> },
-      { label: "Settings",           path: "/settings", icon: <FaCog size={15} /> },
+      { label: "Reviews & Disputes", path: "/reviews",       icon: <FaComments size={15} /> },
+      { label: "Notifications",      path: "/notifications", icon: <FaBell size={15} />     },
+      { label: "Settings",           path: "/settings",      icon: <FaCog size={15} />      },
     ],
   },
 ];
