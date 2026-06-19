@@ -34,7 +34,7 @@ export default function Login() {
         {[280, 480, 680, 900].map((s) => (
           <div
             key={s}
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/[0.05]"
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/5"
             style={{ width: s, height: s }}
           />
         ))}
