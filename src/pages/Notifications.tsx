@@ -1,17 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import type { NType } from "../contexts/NotificationContext";
 import {
   FaMobileAlt, FaCheckCircle, FaSpinner, FaPaperPlane,
-  FaKey, FaEdit, FaTrash, FaEye, FaEyeSlash, FaGlobe,
+  FaTrash, FaSearch, FaUsers, FaEye, FaEyeSlash,
   FaTimesCircle, FaShieldAlt, FaCalendarCheck, FaExclamationCircle,
-  FaLock, FaFlag, FaCog,
+  FaLock, FaFlag, FaCog, FaTimes,
 } from "react-icons/fa";
 
 /* ── Constants ───────────────────────────────────────────────────────── */
 
-const FCM_URL          = "https://fcm.googleapis.com/fcm/send";
-const FCM_CONFIG_KEY   = "hireapp_fcm_config";
-const FCM_HISTORY_KEY  = "hireapp_fcm_history";
+const FCM_URL         = "https://fcm.googleapis.com/fcm/send";
+const FCM_KEY_KEY     = "hireapp_fcm_server_key";
+const FCM_HISTORY_KEY = "hireapp_fcm_history";
 
 const TARGET_TOPICS: Record<string, string> = {
   all:         "/topics/all",
@@ -28,13 +28,42 @@ const TYPE_META: Record<NType, { label: string; icon: React.ElementType; iconBg:
   system:       { label: "System",       icon: FaCog,               iconBg: "bg-gray-100",   iconColor: "text-gray-500"   },
 };
 
-/* ── Types ───────────────────────────────────────────────────────────── */
+/* ── User list with FCM tokens ───────────────────────────────────────── */
 
-interface FCMConfig {
-  serverKey:  string;
-  backendUrl: string;
-  mode:       "direct" | "backend";
+interface AppUser {
+  id:     number;
+  name:   string;
+  email:  string;
+  role:   "Renter" | "Advertiser" | "Both";
+  avatar: string;
+  token:  string;
 }
+
+const USERS: AppUser[] = [
+  { id: 1,  name: "Sarah Mitchell",  email: "sarah@example.com",   role: "Renter",     avatar: "SM", token: "dGpX8w:APA91bHnKm2Y9ZvRt3QxWcBjLr5Mn8Pu7KsYe1FwNv4Tz6QmAb0DcEf3Gh" },
+  { id: 2,  name: "James Turner",    email: "james@example.com",   role: "Advertiser", avatar: "JT", token: "eKmY3z:APA91bRt7Lp9Qm4XsWdBgMr2Nk5Ou8JtZe6FvPw1Ay3DcEb4Hi7Kf0Lj" },
+  { id: 3,  name: "Emily Chen",      email: "emily@example.com",   role: "Renter",     avatar: "EC", token: "fNrZ5w:APA91bUw8Mn2Vk7YtXcBhLs3Ok6Pu9ItZd7GwQx2By4EfDa5Jj8Mh1Ni" },
+  { id: 4,  name: "Daniel Brooks",   email: "daniel@example.com",  role: "Advertiser", avatar: "DB", token: "gPsA6x:APA91bVx9No3Wl8ZuYdCiMt4Pl7Qv0JuAe8HxRy3Cz5FgEb6Kk9Nl2Oj" },
+  { id: 5,  name: "Marcus Reid",     email: "marcus@example.com",  role: "Renter",     avatar: "MR", token: "hQtB7y:APA91bWy0Op4Xm9AvZeCjNu5Qm8Rw1KvBf9IyS4Dz6GhFc7Ll0Mo3Pk" },
+  { id: 6,  name: "Priya Sharma",    email: "priya@example.com",   role: "Advertiser", avatar: "PS", token: "iRuC8z:APA91bXz1Pq5Yn0BwAfDkOv6Rn9Sx2LwCg0JzT5Ea7HiFd8Mm1Np4Ql" },
+  { id: 7,  name: "Tom Nguyen",      email: "tom@example.com",     role: "Renter",     avatar: "TN", token: "jSvD9a:APA91bYa2Qr6Zo1CxBgElPw7So0Ty3MxDh1KaU6Fb8IjGe9Nn2Oq5Rm" },
+  { id: 8,  name: "Aisha Okonkwo",   email: "aisha@example.com",   role: "Both",       avatar: "AO", token: "kTwE0b:APA91bZb3Rs7Ap2DyChFmQx8Tp1Uz4NyEi2LbV7Gc9JkHf0Oo3Pr6Sn" },
+  { id: 9,  name: "Oliver Walsh",    email: "oliver@example.com",  role: "Advertiser", avatar: "OW", token: "lUxF1c:APA91bAc4St8Bq3EzDiFnRy9Uq2Va5OzFj3McW8Hd0KlIg1Pp4Qs7To" },
+  { id: 10, name: "Lily Thompson",   email: "lily@example.com",    role: "Renter",     avatar: "LT", token: "mVyG2d:APA91bBd5Tu9Cr4FaEjGoSz0Vr3Wb6PaGk4NdX9Ie1LmJh2Qq5Rt8Up" },
+];
+
+const AVATAR_COLORS = [
+  "bg-indigo-500", "bg-blue-500", "bg-green-500", "bg-purple-500", "bg-orange-500",
+  "bg-pink-500",   "bg-teal-500", "bg-red-500",   "bg-cyan-500",   "bg-amber-500",
+];
+
+const ROLE_COLORS: Record<AppUser["role"], string> = {
+  Renter:     "bg-blue-100 text-blue-700",
+  Advertiser: "bg-purple-100 text-purple-700",
+  Both:       "bg-green-100 text-green-700",
+};
+
+/* ── Shared types ────────────────────────────────────────────────────── */
 
 interface FCMRecord {
   id:        string;
@@ -42,6 +71,7 @@ interface FCMRecord {
   body:      string;
   type:      NType;
   target:    string;
+  userName?: string;
   timestamp: number;
   status:    "success" | "error";
   messageId?: string;
@@ -49,228 +79,203 @@ interface FCMRecord {
 }
 
 type SendStatus = "idle" | "sending" | "success" | "error";
+type TargetMode = "all" | "renters" | "advertisers" | "user";
 
 /* ── Storage helpers ─────────────────────────────────────────────────── */
 
-function loadConfig(): FCMConfig {
-  try { const r = localStorage.getItem(FCM_CONFIG_KEY); if (r) return JSON.parse(r); } catch {}
-  return { serverKey: "", backendUrl: "", mode: "direct" };
-}
-
 function loadHistory(): FCMRecord[] {
-  try { const r = localStorage.getItem(FCM_HISTORY_KEY); if (r) return JSON.parse(r); } catch {}
+  const raw = localStorage.getItem(FCM_HISTORY_KEY);
+  if (!raw) return [];
+  try { return JSON.parse(raw) as FCMRecord[]; } catch (_e) { void _e; }
   return [];
 }
-
 function saveHistory(h: FCMRecord[]) {
-  try { localStorage.setItem(FCM_HISTORY_KEY, JSON.stringify(h.slice(0, 100))); } catch {}
+  try { localStorage.setItem(FCM_HISTORY_KEY, JSON.stringify(h.slice(0, 100))); } catch (_e) { void _e; }
 }
-
+function loadKey(): string {
+  return localStorage.getItem(FCM_KEY_KEY) ?? "";
+}
 function timeAgo(ts: number): string {
   const diff = Date.now() - ts;
   const min  = Math.floor(diff / 60_000);
   if (min < 1)  return "Just now";
-  if (min < 60) return `${min} min ago`;
+  if (min < 60) return min + " min ago";
   const hr = Math.floor(min / 60);
-  if (hr < 24)  return `${hr} hr ago`;
+  if (hr < 24)  return hr + " hr ago";
   const d = Math.floor(hr / 24);
-  if (d < 7)    return `${d} day${d > 1 ? "s" : ""} ago`;
-  return new Date(ts).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+  return d < 7 ? d + " day" + (d > 1 ? "s" : "") + " ago"
+    : new Date(ts).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
 }
 
-/* ── Firebase Config Card ────────────────────────────────────────────── */
+/* ── User Picker ─────────────────────────────────────────────────────── */
 
-function ConfigCard({ config, onChange }: { config: FCMConfig; onChange: (c: FCMConfig) => void }) {
-  const [editing,  setEditing]  = useState(false);
-  const [showKey,  setShowKey]  = useState(false);
-  const [draft,    setDraft]    = useState(config);
+function UserPicker({ selected, onSelect }: {
+  selected: AppUser | null;
+  onSelect: (u: AppUser | null) => void;
+}) {
+  const [search, setSearch] = useState("");
 
-  const configured = config.mode === "direct" ? !!config.serverKey : !!config.backendUrl;
-
-  const save = () => {
-    onChange(draft);
-    localStorage.setItem(FCM_CONFIG_KEY, JSON.stringify(draft));
-    setEditing(false);
-  };
-
-  if (!editing) {
-    return (
-      <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-50">
-              <FaKey size={14} className="text-orange-500" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-gray-900">Firebase Configuration</p>
-              <p className="text-xs text-gray-400">
-                {configured
-                  ? config.mode === "direct"
-                    ? `Server Key ●●●●${config.serverKey.slice(-4)} · Direct mode`
-                    : `Backend: ${config.backendUrl}`
-                  : "Not configured — add your Firebase credentials to enable sending"}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
-              configured ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
-              {configured ? "✓ Configured" : "Not set"}
-            </span>
-            <button onClick={() => { setDraft(config); setEditing(true); }}
-              className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors">
-              <FaEdit size={10} /> Edit
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const filtered = useMemo(
+    () => USERS.filter((u) =>
+      u.name.toLowerCase().includes(search.toLowerCase()) ||
+      u.email.toLowerCase().includes(search.toLowerCase()) ||
+      u.role.toLowerCase().includes(search.toLowerCase())
+    ),
+    [search]
+  );
 
   return (
-    <div className="rounded-xl border border-blue-200 bg-white shadow-sm ring-2 ring-blue-50">
-      <div className="border-b border-gray-100 px-5 py-4">
-        <p className="text-sm font-semibold text-gray-900">Firebase Configuration</p>
-        <p className="mt-0.5 text-xs text-gray-400">Choose how this admin panel connects to Firebase Cloud Messaging.</p>
-      </div>
-      <div className="space-y-4 p-5">
-        {/* Mode selector */}
-        <div className="grid grid-cols-2 gap-2">
-          {([
-            { key: "direct",  label: "Server Key (Direct)",  sub: "Call FCM from browser"           },
-            { key: "backend", label: "Backend API Proxy",    sub: "Route through your server (secure)" },
-          ] as const).map((m) => (
-            <button key={m.key} onClick={() => setDraft((d) => ({ ...d, mode: m.key }))}
-              className={`rounded-lg border px-4 py-3 text-left transition-colors ${
-                draft.mode === m.key ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300"}`}>
-              <p className="text-xs font-semibold text-gray-800">{m.label}</p>
-              <p className="mt-0.5 text-[10px] text-gray-400">{m.sub}</p>
-            </button>
-          ))}
-        </div>
+    <div className="space-y-2">
+      <label className="block text-xs font-semibold text-gray-600">Select User</label>
 
-        {draft.mode === "direct" ? (
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold text-gray-600">
-              Firebase Server Key
-              <span className="ml-1 font-normal text-gray-400">(Firebase Console → Project Settings → Cloud Messaging)</span>
-            </label>
-            <div className="relative">
-              <input type={showKey ? "text" : "password"} placeholder="AAAA…"
-                value={draft.serverKey} onChange={(e) => setDraft((d) => ({ ...d, serverKey: e.target.value }))}
-                className="w-full rounded-lg border border-gray-200 pr-10 px-3 py-2.5 font-mono text-sm text-gray-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50" />
-              <button onClick={() => setShowKey((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                {showKey ? <FaEyeSlash size={13} /> : <FaEye size={13} />}
-              </button>
-            </div>
-            <p className="mt-1.5 rounded-lg bg-yellow-50 px-3 py-2 text-[10px] text-yellow-700">
-              For production, use Backend Proxy mode so your Server Key is never exposed in the browser.
-            </p>
-          </div>
-        ) : (
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold text-gray-600">
-              Backend API Endpoint
-              <span className="ml-1 font-normal text-gray-400">(your server forwards to FCM with the Server Key)</span>
-            </label>
-            <input type="url" placeholder="https://yourapp.com/api/send-notification"
-              value={draft.backendUrl} onChange={(e) => setDraft((d) => ({ ...d, backendUrl: e.target.value }))}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50" />
-            <p className="mt-1.5 text-[10px] text-gray-400">
-              Your endpoint should accept: <code className="rounded bg-gray-100 px-1">POST {"{ title, body, topic, type }"}</code>
-            </p>
-          </div>
+      <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+        <FaSearch size={11} className="shrink-0 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Search by name, email or role…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none"
+        />
+        {search && (
+          <button onClick={() => setSearch("")} className="shrink-0 text-gray-400 hover:text-gray-600 transition-colors">
+            <FaTimes size={10} />
+          </button>
         )}
+      </div>
 
-        <div className="flex gap-2 pt-1">
-          <button onClick={save}
-            className="flex-1 rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors">
-            Save
-          </button>
-          <button onClick={() => setEditing(false)}
-            className="rounded-lg border border-gray-200 px-5 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
-            Cancel
+      <div className="max-h-56 overflow-y-auto rounded-xl border border-gray-200 divide-y divide-gray-100">
+        {filtered.length === 0 ? (
+          <div className="flex items-center justify-center py-8 text-sm text-gray-400">No users found</div>
+        ) : filtered.map((u) => {
+          const isSelected = selected?.id === u.id;
+          return (
+            <button
+              key={u.id}
+              type="button"
+              onClick={() => onSelect(isSelected ? null : u)}
+              className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
+                isSelected ? "bg-blue-50" : "hover:bg-gray-50/80"
+              }`}
+            >
+              <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${AVATAR_COLORS[(u.id - 1) % AVATAR_COLORS.length]}`}>
+                {u.avatar}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className={`text-sm font-medium ${isSelected ? "text-blue-700" : "text-gray-900"}`}>{u.name}</p>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${ROLE_COLORS[u.role]}`}>{u.role}</span>
+                </div>
+                <p className="text-xs text-gray-400">{u.email}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="hidden sm:block font-mono text-[10px] text-gray-300">●●●●{u.token.slice(-6)}</span>
+                {isSelected && <FaCheckCircle size={14} className="text-blue-500" />}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {selected && (
+        <div className="flex items-start gap-2.5 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+          <FaMobileAlt size={12} className="mt-0.5 shrink-0 text-blue-500" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold text-blue-800">Sending to: {selected.name}</p>
+            <p className="mt-0.5 break-all font-mono text-[10px] text-blue-500">{selected.token}</p>
+          </div>
+          <button onClick={() => onSelect(null)} className="shrink-0 text-blue-400 hover:text-blue-600 transition-colors">
+            <FaTimes size={10} />
           </button>
         </div>
-      </div>
+      )}
     </div>
   );
 }
 
 /* ── Compose Card ────────────────────────────────────────────────────── */
 
-const BLANK = { title: "", body: "", type: "system" as NType, target: "all" as const, token: "" };
+const TARGET_OPTIONS: { key: TargetMode; label: string; sub: string; icon: React.ElementType }[] = [
+  { key: "all",         label: "All Users",    sub: "/topics/all",         icon: FaUsers      },
+  { key: "renters",     label: "Renters",      sub: "/topics/renters",     icon: FaMobileAlt  },
+  { key: "advertisers", label: "Advertisers",  sub: "/topics/advertisers", icon: FaMobileAlt  },
+  { key: "user",        label: "Specific User", sub: "choose from list",   icon: FaSearch     },
+];
 
-function ComposeCard({ config, onSent }: {
-  config: FCMConfig;
+const BLANK_FORM = { title: "", body: "", type: "system" as NType };
+
+function ComposeCard({ serverKey, onSent }: {
+  serverKey: string;
   onSent: (r: FCMRecord) => void;
 }) {
-  const [form,   setForm]   = useState(BLANK);
-  const [status, setStatus] = useState<SendStatus>("idle");
-  const [result, setResult] = useState<{ messageId?: string; error?: string } | null>(null);
+  const [form,         setForm]         = useState(BLANK_FORM);
+  const [targetMode,   setTargetMode]   = useState<TargetMode>("all");
+  const [selectedUser, setSelectedUser] = useState<AppUser | null>(null);
+  const [status,       setStatus]       = useState<SendStatus>("idle");
+  const [result,       setResult]       = useState<{ messageId?: string; error?: string } | null>(null);
 
-  const configured = config.mode === "direct" ? !!config.serverKey : !!config.backendUrl;
-  const canSend    = configured && !!form.title.trim() && !!form.body.trim() &&
-                     (form.target !== "token" || !!form.token.trim());
+  const canSend =
+    !!serverKey &&
+    !!form.title.trim() &&
+    !!form.body.trim() &&
+    (targetMode !== "user" || !!selectedUser);
 
   const send = async () => {
     if (!canSend) return;
     setStatus("sending");
     setResult(null);
 
-    const to = form.target === "token" ? form.token.trim() : TARGET_TOPICS[form.target];
+    const to = targetMode === "user" ? selectedUser!.token : TARGET_TOPICS[targetMode];
 
     try {
-      let data: Record<string, unknown>;
+      const res = await fetch(FCM_URL, {
+        method: "POST",
+        headers: {
+          Authorization: "key=" + serverKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          to,
+          notification: { title: form.title, body: form.body, sound: "default" },
+          data: { type: form.type, click_action: "FLUTTER_NOTIFICATION_CLICK" },
+        }),
+      });
 
-      if (config.mode === "backend") {
-        const res = await fetch(config.backendUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: form.title, body: form.body, topic: to, type: form.type }),
-        });
-        data = await res.json();
-        if (!res.ok) throw new Error((data.error as string) || `HTTP ${res.status}`);
-      } else {
-        const res = await fetch(FCM_URL, {
-          method: "POST",
-          headers: { Authorization: `key=${config.serverKey}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            to,
-            notification: { title: form.title, body: form.body, sound: "default" },
-            data: { type: form.type, click_action: "FLUTTER_NOTIFICATION_CLICK" },
-          }),
-        });
-        data = await res.json();
-        if (!res.ok || (data.failure as number) > 0) {
-          throw new Error(((data.results as { error?: string }[])?.[0]?.error) || "Delivery failed");
-        }
+      const data: Record<string, unknown> = await res.json();
+
+      if (!res.ok || (data.failure as number) > 0) {
+        throw new Error(
+          ((data.results as { error?: string }[])?.[0]?.error) || "Delivery failed"
+        );
       }
 
       const record: FCMRecord = {
         id: String(Date.now()), title: form.title, body: form.body,
-        type: form.type, target: to, timestamp: Date.now(),
-        status: "success", messageId: data.message_id as string | undefined,
+        type: form.type, target: to,
+        userName: selectedUser?.name,
+        timestamp: Date.now(), status: "success",
+        messageId: data.message_id as string | undefined,
       };
       setStatus("success");
       setResult({ messageId: record.messageId });
       onSent(record);
-      setForm(BLANK);
+      setForm(BLANK_FORM);
+      setSelectedUser(null);
       setTimeout(() => { setStatus("idle"); setResult(null); }, 5000);
 
     } catch (err) {
-      const msg    = err instanceof Error ? err.message : "Unknown error";
-      const isCors = msg.includes("Failed to fetch");
+      const msg     = err instanceof Error ? err.message : "Unknown error";
+      const isCors  = msg.includes("Failed to fetch");
       const display = isCors
-        ? "Blocked by CORS — browsers cannot call FCM directly. Switch to Backend Proxy mode."
+        ? "CORS blocked: browsers cannot call FCM directly. Use a backend proxy that holds your Server Key."
         : msg;
+
       setStatus("error");
       setResult({ error: display });
       onSent({
         id: String(Date.now()), title: form.title, body: form.body,
-        type: form.type, target: to, timestamp: Date.now(),
-        status: "error", error: display,
+        type: form.type, target: to, userName: selectedUser?.name,
+        timestamp: Date.now(), status: "error", error: display,
       });
     }
   };
@@ -283,87 +288,111 @@ function ComposeCard({ config, onSent }: {
             <FaPaperPlane size={13} className="text-blue-600" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-gray-900">Compose Push Notification</p>
-            <p className="text-xs text-gray-400">Delivered instantly to all subscribed mobile app users via Firebase.</p>
+            <p className="text-sm font-semibold text-gray-900">Compose Notification</p>
+            <p className="text-xs text-gray-400">Delivered instantly to mobile app users via Firebase Cloud Messaging.</p>
           </div>
         </div>
+
+        {!serverKey && (
+          <div className="mt-3 flex items-center gap-2 rounded-lg border border-yellow-100 bg-yellow-50 px-3 py-2 text-xs text-yellow-700">
+            <FaCog size={10} className="shrink-0" />
+            Firebase Server Key not set — configure it in the section below.
+          </div>
+        )}
       </div>
 
-      <div className="space-y-4 p-5">
+      <div className="space-y-5 p-5">
+
         {/* Title */}
         <div>
           <label className="mb-1.5 block text-xs font-semibold text-gray-600">Title</label>
-          <input type="text" placeholder="e.g. New listing available near you"
-            value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-            className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition-colors" />
+          <input
+            type="text"
+            placeholder="e.g. Your booking has been confirmed"
+            value={form.title}
+            onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+            className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition-colors"
+          />
         </div>
 
-        {/* Body */}
+        {/* Message */}
         <div>
           <label className="mb-1.5 block text-xs font-semibold text-gray-600">Message</label>
-          <textarea rows={3} placeholder="Write your notification message…"
-            value={form.body} onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
-            className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition-colors" />
+          <textarea
+            rows={3}
+            placeholder="Write your notification message…"
+            value={form.body}
+            onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
+            className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition-colors"
+          />
         </div>
 
-        {/* Category + Target */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold text-gray-600">Category</label>
-            <select value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as NType }))}
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 cursor-pointer">
-              {(Object.entries(TYPE_META) as [NType, (typeof TYPE_META)[NType]][]).map(([k, v]) => (
-                <option key={k} value={k}>{v.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold text-gray-600">Target Audience</label>
-            <select value={form.target} onChange={(e) => setForm((f) => ({ ...f, target: e.target.value as typeof form.target }))}
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 cursor-pointer">
-              <option value="all">All Users</option>
-              <option value="renters">Renters Only</option>
-              <option value="advertisers">Advertisers Only</option>
-              <option value="token">Specific Device</option>
-            </select>
+        {/* Category */}
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-gray-600">Category</label>
+          <select
+            value={form.type}
+            onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as NType }))}
+            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 cursor-pointer"
+          >
+            {(Object.entries(TYPE_META) as [NType, typeof TYPE_META[NType]][]).map(([k, v]) => (
+              <option key={k} value={k}>{v.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Target audience */}
+        <div>
+          <label className="mb-2 block text-xs font-semibold text-gray-600">Target Audience</label>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {TARGET_OPTIONS.map((t) => {
+              const Icon = t.icon;
+              const active = targetMode === t.key;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => { setTargetMode(t.key); setSelectedUser(null); }}
+                  className={`rounded-xl border px-3 py-3 text-left transition-colors ${
+                    active ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                  }`}
+                >
+                  <Icon size={13} className={active ? "text-blue-500" : "text-gray-400"} />
+                  <p className={`mt-1.5 text-xs font-semibold ${active ? "text-blue-700" : "text-gray-700"}`}>{t.label}</p>
+                  <p className="mt-0.5 text-[10px] text-gray-400">{t.sub}</p>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Device token input */}
-        {form.target === "token" && (
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold text-gray-600">Device Token</label>
-            <input type="text" placeholder="FCM device registration token…"
-              value={form.token} onChange={(e) => setForm((f) => ({ ...f, token: e.target.value }))}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 font-mono text-xs text-gray-800 placeholder-gray-400 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition-colors" />
-          </div>
+        {/* User picker */}
+        {targetMode === "user" && (
+          <UserPicker selected={selectedUser} onSelect={setSelectedUser} />
         )}
 
-        {/* FCM topic preview */}
-        {form.target !== "token" && (
-          <div className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-xs">
-            <FaGlobe size={10} className="shrink-0 text-gray-400" />
+        {/* Topic preview for broadcast modes */}
+        {targetMode !== "user" && (
+          <div className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2.5 text-xs">
+            <FaMobileAlt size={10} className="shrink-0 text-gray-400" />
             <span className="text-gray-500">FCM topic:</span>
-            <span className="font-mono font-medium text-gray-700">{TARGET_TOPICS[form.target]}</span>
+            <span className="font-mono font-medium text-gray-700">{TARGET_TOPICS[targetMode]}</span>
           </div>
         )}
 
-        {/* Warning if not configured */}
-        {!configured && (
-          <p className="rounded-lg border border-yellow-100 bg-yellow-50 px-3 py-2.5 text-xs text-yellow-700">
-            Configure your Firebase credentials above before sending.
-          </p>
-        )}
-
-        {/* Send button */}
-        <button onClick={send} disabled={!canSend || status === "sending"}
+        {/* Send */}
+        <button
+          onClick={send}
+          disabled={!canSend || status === "sending"}
           className={`flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white transition-all ${
             canSend && status !== "sending"
               ? "bg-blue-600 hover:bg-blue-700 active:scale-95 shadow-sm"
-              : "cursor-not-allowed bg-gray-100 text-gray-400"}`}>
+              : "cursor-not-allowed bg-gray-100 text-gray-400"
+          }`}
+        >
           {status === "sending"
-            ? <><FaSpinner size={13} className="animate-spin" /> Sending to Firebase…</>
-            : <><FaMobileAlt size={13} /> Send to Mobile App</>}
+            ? <><FaSpinner size={13} className="animate-spin" /> Sending…</>
+            : <><FaMobileAlt size={13} /> Send Push to Mobile App</>}
         </button>
 
         {/* Result */}
@@ -395,16 +424,18 @@ function ComposeCard({ config, onSent }: {
 /* ── Sent History ────────────────────────────────────────────────────── */
 
 function HistoryCard({ history, onDelete, onClear }: {
-  history: FCMRecord[];
+  history:  FCMRecord[];
   onDelete: (id: string) => void;
-  onClear: () => void;
+  onClear:  () => void;
 }) {
   return (
     <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
       <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
         <div>
           <p className="text-sm font-semibold text-gray-900">Sent History</p>
-          <p className="text-xs text-gray-400">{history.length} notification{history.length !== 1 ? "s" : ""} sent</p>
+          <p className="text-xs text-gray-400">
+            {history.length} sent · {history.filter((r) => r.status === "success").length} delivered
+          </p>
         </div>
         {history.length > 0 && (
           <button onClick={onClear}
@@ -432,19 +463,23 @@ function HistoryCard({ history, onDelete, onClear }: {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-3">
-                  <p className="text-sm font-medium text-gray-900">{r.title}</p>
-                  <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
-                    r.status === "success" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900">{r.title}</p>
+                    <p className="mt-0.5 truncate text-xs text-gray-400">{r.body}</p>
+                  </div>
+                  <span className={"shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold " + (r.status === "success" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600")}>
                     {r.status === "success" ? "Delivered" : "Failed"}
                   </span>
                 </div>
-                <p className="mt-0.5 text-xs text-gray-400">{r.body}</p>
-                <div className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-gray-400">
-                  <span>{timeAgo(r.timestamp)}</span>
-                  <span className="rounded bg-gray-100 px-1.5 py-0.5 font-mono">{r.target}</span>
-                  <span className={`rounded px-1.5 py-0.5 font-medium ${meta.iconBg} ${meta.iconColor}`}>{meta.label}</span>
+                <div className="mt-2 flex flex-wrap items-center gap-2.5 text-[10px]">
+                  <span className="text-gray-400">{timeAgo(r.timestamp)}</span>
+                  {r.userName
+                    ? <span className="rounded bg-blue-50 px-1.5 py-0.5 font-medium text-blue-600">{r.userName}</span>
+                    : <span className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-500">{r.target}</span>
+                  }
+                  <span className={"rounded px-1.5 py-0.5 font-medium " + meta.iconBg + " " + meta.iconColor}>{meta.label}</span>
                   {r.messageId && <span className="font-mono text-green-500">ID …{r.messageId.slice(-10)}</span>}
-                  {r.error && <span className="text-red-400 max-w-xs truncate">{r.error}</span>}
+                  {r.error && <span className="max-w-xs truncate text-red-400">{r.error}</span>}
                   <button onClick={() => onDelete(r.id)} className="ml-auto text-gray-300 hover:text-red-400 transition-colors">
                     <FaTrash size={9} />
                   </button>
@@ -458,37 +493,113 @@ function HistoryCard({ history, onDelete, onClear }: {
   );
 }
 
+/* ── Firebase Key Setup ──────────────────────────────────────────────── */
+
+function KeyConfig({ serverKey, onSave }: { serverKey: string; onSave: (k: string) => void }) {
+  const [open,    setOpen]    = useState(false);
+  const [draft,   setDraft]   = useState(serverKey);
+  const [showKey, setShowKey] = useState(false);
+
+  const save = () => {
+    const trimmed = draft.trim();
+    localStorage.setItem(FCM_KEY_KEY, trimmed);
+    onSave(trimmed);
+    setOpen(false);
+  };
+
+  return (
+    <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
+      <button
+        type="button"
+        onClick={() => { setDraft(serverKey); setOpen((v) => !v); }}
+        className="flex w-full items-center justify-between px-5 py-4 text-left"
+      >
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100">
+            <FaCog size={12} className="text-gray-500" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-gray-900">Firebase Server Key</p>
+            <p className="text-xs text-gray-400">
+              {serverKey ? "Key set · ●●●●" + serverKey.slice(-4) : "Not configured"}
+            </p>
+          </div>
+        </div>
+        <span className={"rounded-full px-3 py-1 text-xs font-semibold " + (serverKey ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700")}>
+          {serverKey ? "✓ Set" : "Not set"}
+        </span>
+      </button>
+
+      {open && (
+        <div className="space-y-3 border-t border-gray-100 p-5">
+          <p className="text-xs text-gray-500">
+            Find your key at:{" "}
+            <span className="font-medium text-gray-700">
+              Firebase Console → Project Settings → Cloud Messaging → Server Key
+            </span>
+          </p>
+          <div className="relative">
+            <input
+              type={showKey ? "text" : "password"}
+              placeholder="AAAA…"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 pr-10 px-3 py-2.5 font-mono text-sm text-gray-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+            />
+            <button onClick={() => setShowKey((v) => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
+              {showKey ? <FaEyeSlash size={13} /> : <FaEye size={13} />}
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={save}
+              className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors">
+              Save
+            </button>
+            <button onClick={() => setOpen(false)}
+              className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Page ────────────────────────────────────────────────────────────── */
 
 export default function Notifications() {
-  const [config,  setConfig]  = useState<FCMConfig>(loadConfig);
-  const [history, setHistory] = useState<FCMRecord[]>(loadHistory);
+  const [serverKey, setServerKey] = useState(loadKey);
+  const [history,   setHistory]   = useState<FCMRecord[]>(loadHistory);
 
   useEffect(() => { saveHistory(history); }, [history]);
 
   const delivered  = history.filter((r) => r.status === "success").length;
   const failed     = history.filter((r) => r.status === "error").length;
-  const todayCount = history.filter((r) => r.timestamp >= new Date().setHours(0, 0, 0, 0)).length;
+  const todayStart = new Date().setHours(0, 0, 0, 0);
+  const todayCount = history.filter((r) => r.timestamp >= todayStart).length;
 
   return (
     <div className="space-y-5">
 
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Push Notifications</h1>
-        <p className="mt-1 text-sm text-gray-500">Send push notifications to mobile app users via Firebase Cloud Messaging.</p>
+        <p className="mt-1 text-sm text-gray-500">
+          Send Firebase Cloud Messaging push notifications to all users or a specific user.
+        </p>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         {[
-          { label: "Total Sent",  value: history.length, color: "text-blue-600",  bg: "bg-blue-50"  },
-          { label: "Delivered",   value: delivered,      color: "text-green-600", bg: "bg-green-50" },
-          { label: "Failed",      value: failed,         color: "text-red-500",   bg: "bg-red-50"   },
-          { label: "Today",       value: todayCount,     color: "text-indigo-600",bg: "bg-indigo-50"},
+          { label: "Total Sent", value: history.length, bg: "bg-blue-50",   color: "text-blue-600"   },
+          { label: "Delivered",  value: delivered,       bg: "bg-green-50",  color: "text-green-600"  },
+          { label: "Failed",     value: failed,          bg: "bg-red-50",    color: "text-red-500"    },
+          { label: "Today",      value: todayCount,      bg: "bg-indigo-50", color: "text-indigo-600" },
         ].map((s) => (
           <div key={s.label} className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
-            <div className={`mb-2 flex h-9 w-9 items-center justify-center rounded-xl ${s.bg}`}>
+            <div className={"mb-2 flex h-9 w-9 items-center justify-center rounded-xl " + s.bg}>
               <FaMobileAlt size={14} className={s.color} />
             </div>
             <p className="text-2xl font-bold text-gray-900">{s.value}</p>
@@ -497,20 +608,15 @@ export default function Notifications() {
         ))}
       </div>
 
-      {/* Config */}
-      <ConfigCard config={config} onChange={setConfig} />
+      <ComposeCard serverKey={serverKey} onSent={(r) => setHistory((h) => [r, ...h])} />
 
-      {/* Compose */}
-      <ComposeCard config={config} onSent={(r) => setHistory((h) => [r, ...h])} />
-
-      {/* History */}
       <HistoryCard
         history={history}
         onDelete={(id) => setHistory((h) => h.filter((r) => r.id !== id))}
         onClear={() => setHistory([])}
       />
 
-    
+      <KeyConfig serverKey={serverKey} onSave={setServerKey} />
 
     </div>
   );

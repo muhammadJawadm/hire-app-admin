@@ -1,0 +1,92 @@
+import { useState, useEffect, useMemo } from 'react';
+import type { NType } from '../contexts/NotificationContext';
+import {
+  FaMobileAlt, FaCheckCircle, FaSpinner, FaPaperPlane,
+  FaTrash, FaSearch, FaUsers, FaEye, FaEyeSlash,
+  FaTimesCircle, FaShieldAlt, FaCalendarCheck, FaExclamationCircle,
+  FaLock, FaFlag, FaCog, FaTimes,
+} from 'react-icons/fa';
+
+const FCM_URL         = 'https://fcm.googleapis.com/fcm/send';
+const FCM_KEY_KEY     = 'hireapp_fcm_server_key';
+const FCM_HISTORY_KEY = 'hireapp_fcm_history';
+
+const TARGET_TOPICS: Record<string, string> = {
+  all:         '/topics/all',
+  renters:     '/topics/renters',
+  advertisers: '/topics/advertisers',
+};
+
+const TYPE_META: Record<NType, { label: string; icon: React.ElementType; iconBg: string; iconColor: string }> = {
+  verification: { label: 'Verification', icon: FaShieldAlt,         iconBg: 'bg-blue-100',   iconColor: 'text-blue-600'   },
+  booking:      { label: 'Booking',      icon: FaCalendarCheck,     iconBg: 'bg-green-100',  iconColor: 'text-green-600'  },
+  dispute:      { label: 'Dispute',      icon: FaExclamationCircle, iconBg: 'bg-red-100',    iconColor: 'text-red-500'    },
+  escrow:       { label: 'Escrow',       icon: FaLock,              iconBg: 'bg-orange-100', iconColor: 'text-orange-500' },
+  review:       { label: 'Review',       icon: FaFlag,              iconBg: 'bg-yellow-100', iconColor: 'text-yellow-600' },
+  system:       { label: 'System',       icon: FaCog,               iconBg: 'bg-gray-100',   iconColor: 'text-gray-500'   },
+};
+
+interface AppUser {
+  id:     number;
+  name:   string;
+  email:  string;
+  role:   'Renter' | 'Advertiser' | 'Both';
+  avatar: string;
+  token:  string;
+}
+
+const USERS: AppUser[] = [
+  { id: 1,  name: 'Sarah Mitchell',  email: 'sarah@example.com',   role: 'Renter',     avatar: 'SM', token: 'dGpX8w:APA91bHnKm2Y9ZvRt3QxWcBjLr5Mn8Pu7KsYe1FwNv4Tz6QmAb0DcEf3Gh' },
+  { id: 2,  name: 'James Turner',    email: 'james@example.com',   role: 'Advertiser', avatar: 'JT', token: 'eKmY3z:APA91bRt7Lp9Qm4XsWdBgMr2Nk5Ou8JtZe6FvPw1Ay3DcEb4Hi7Kf0Lj' },
+  { id: 3,  name: 'Emily Chen',      email: 'emily@example.com',   role: 'Renter',     avatar: 'EC', token: 'fNrZ5w:APA91bUw8Mn2Vk7YtXcBhLs3Ok6Pu9ItZd7GwQx2By4EfDa5Jj8Mh1Ni' },
+  { id: 4,  name: 'Daniel Brooks',   email: 'daniel@example.com',  role: 'Advertiser', avatar: 'DB', token: 'gPsA6x:APA91bVx9No3Wl8ZuYdCiMt4Pl7Qv0JuAe8HxRy3Cz5FgEb6Kk9Nl2Oj' },
+  { id: 5,  name: 'Marcus Reid',     email: 'marcus@example.com',  role: 'Renter',     avatar: 'MR', token: 'hQtB7y:APA91bWy0Op4Xm9AvZeCjNu5Qm8Rw1KvBf9IyS4Dz6GhFc7Ll0Mo3Pk' },
+  { id: 6,  name: 'Priya Sharma',    email: 'priya@example.com',   role: 'Advertiser', avatar: 'PS', token: 'iRuC8z:APA91bXz1Pq5Yn0BwAfDkOv6Rn9Sx2LwCg0JzT5Ea7HiFd8Mm1Np4Ql' },
+  { id: 7,  name: 'Tom Nguyen',      email: 'tom@example.com',     role: 'Renter',     avatar: 'TN', token: 'jSvD9a:APA91bYa2Qr6Zo1CxBgElPw7So0Ty3MxDh1KaU6Fb8IjGe9Nn2Oq5Rm' },
+  { id: 8,  name: 'Aisha Okonkwo',   email: 'aisha@example.com',   role: 'Both',       avatar: 'AO', token: 'kTwE0b:APA91bZb3Rs7Ap2DyChFmQx8Tp1Uz4NyEi2LbV7Gc9JkHf0Oo3Pr6Sn' },
+  { id: 9,  name: 'Oliver Walsh',    email: 'oliver@example.com',  role: 'Advertiser', avatar: 'OW', token: 'lUxF1c:APA91bAc4St8Bq3EzDiFnRy9Uq2Va5OzFj3McW8Hd0KlIg1Pp4Qs7To' },
+  { id: 10, name: 'Lily Thompson',   email: 'lily@example.com',    role: 'Renter',     avatar: 'LT', token: 'mVyG2d:APA91bBd5Tu9Cr4FaEjGoSz0Vr3Wb6PaGk4NdX9Ie1LmJh2Qq5Rt8Up' },
+];
+
+const ROLE_COLORS: Record<AppUser['role'], string> = {
+  Renter:     'bg-blue-100 text-blue-700',
+  Advertiser: 'bg-purple-100 text-purple-700',
+  Both:       'bg-green-100 text-green-700',
+};
+
+interface FCMRecord {
+  id:        string;
+  title:     string;
+  body:      string;
+  type:      NType;
+  target:    string;
+  userName?: string;
+  timestamp: number;
+  status:    'success' | 'error';
+  messageId?: string;
+  error?:    string;
+}
+
+type SendStatus = 'idle' | 'sending' | 'success' | 'error';
+type TargetMode = 'all' | 'renters' | 'advertisers' | 'user';
+
+function loadHistory(): FCMRecord[] {
+  try { const r = localStorage.getItem(FCM_HISTORY_KEY); if (r) return JSON.parse(r); } catch {}
+  return [];
+}
+function saveHistory(h: FCMRecord[]) {
+  try { localStorage.setItem(FCM_HISTORY_KEY, JSON.stringify(h.slice(0, 100))); } catch {}
+}
+function loadKey(): string {
+  return localStorage.getItem(FCM_KEY_KEY) ?? '';
+}
+function timeAgo(ts: number): string {
+  const diff = Date.now() - ts;
+  const min  = Math.floor(diff / 60_000);
+  if (min < 1)  return 'Just now';
+  if (min < 60) return ;
+  const hr = Math.floor(min / 60);
+  if (hr < 24)  return ;
+  const d = Math.floor(hr / 24);
+  return d < 7 ?     : new Date(ts).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+}
