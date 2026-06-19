@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from "react";
-import type { NType } from "../contexts/NotificationContext";
 import {
   FaMobileAlt, FaCheckCircle, FaSpinner, FaPaperPlane,
   FaTrash, FaSearch, FaUsers, FaEye, FaEyeSlash,
@@ -18,6 +17,8 @@ const TARGET_TOPICS: Record<string, string> = {
   renters:     "/topics/renters",
   advertisers: "/topics/advertisers",
 };
+
+type NType = "verification" | "booking" | "dispute" | "escrow" | "review" | "system";
 
 const TYPE_META: Record<NType, { label: string; icon: React.ElementType; iconBg: string; iconColor: string }> = {
   verification: { label: "Verification", icon: FaShieldAlt,         iconBg: "bg-blue-100",   iconColor: "text-blue-600"   },
